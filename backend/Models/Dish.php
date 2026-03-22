@@ -8,6 +8,7 @@ class Dish
     public $price;
     public $availability;
     public $description;
+    public $image_path;
     public $created_at;
 
     public function __construct(array $data = [])
@@ -18,6 +19,7 @@ class Dish
         $this->price = $data['price'] ?? 0.0;
         $this->availability = (bool)($data['availability'] ?? 1);
         $this->description = $data['description'] ?? '';
+        $this->image_path = $data['image_path'] ?? null;
         $this->created_at = $data['created_at'] ?? null;
     }
 }

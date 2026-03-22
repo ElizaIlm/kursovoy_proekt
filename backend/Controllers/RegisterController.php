@@ -1,6 +1,5 @@
 <?php
     require_once(__DIR__ . '/../../settings/connect_database.php');
-
     require_once(__DIR__ . '/../Models/Client.php');
 
     class RegisterController 

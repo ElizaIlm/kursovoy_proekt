@@ -120,7 +120,7 @@
         </div>
 
         <p class="text-center text-xs text-gray-600 mt-8">
-            © <?= date("Y") ?> Лучший суши-ресторан • С любовью к Японии
+            © <?= date("Y") ?> Лучший суши-ресторан
         </p>
     </div>
 </body>

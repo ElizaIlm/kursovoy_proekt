@@ -1,6 +1,10 @@
 <?php
     require_once("../../../backend/Controllers/LoginController.php");
     $message = "";
+    if(isset($_GET["logout"])) {
+        $controller = new LoginController($mysql_connection);
+        $controller->logout();
+    }
     if ($_SERVER["REQUEST_METHOD"] === "POST") {
         $login = $_POST["login"] ?? "";
         $password = $_POST["password"] ?? "";
@@ -106,7 +110,7 @@
         </div>
 
         <p class="text-center text-xs text-gray-600 mt-8">
-            © <?= date("Y") ?> Лучший суши-ресторан • С любовью к Японии
+            © <?= date("Y") ?> Лучший суши-ресторан
         </p>
 </div>
 </body>

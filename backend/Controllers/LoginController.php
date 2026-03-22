@@ -40,7 +40,7 @@
 
                 return [
                     "success" => true,
-                    "redirect" => "../../client/index.php"
+                    "redirect" => "../../index.php"
                 ];
             }
 
@@ -61,7 +61,7 @@
 
                 return [
                     "success" => true,
-                    "redirect" => "../../admin/dashboard.php"
+                    "redirect" => "../../index.php"
                 ];
             }
 
@@ -76,7 +76,7 @@
             session_unset();
             session_destroy();
 
-            header("Location: login.php");
+            header("Location: ../../../frontend/index.php");
             exit();
         }
     }
