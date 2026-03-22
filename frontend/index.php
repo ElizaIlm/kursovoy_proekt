@@ -95,7 +95,9 @@
                             </span>
                         </span>
                     </a>
-                    <span class="text-gray-300">Здравствуйте, <?= htmlspecialchars($_SESSION["user_name"]) ?></span>
+                    <a href="pages/client/profile.php" class="text-gray-300 hover:text-sushi-gold transition">
+                        Здравствуйте, <?= htmlspecialchars($_SESSION["user_name"]) ?>
+                    </a>
                     <a href="pages/auth/login.php?logout=1" class="text-gray-300 hover:text-red-400 transition">Выйти</a>
                 <?php endif; ?>
             </div>
