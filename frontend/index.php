@@ -4,6 +4,8 @@
 
     $dishController = new DishController($mysql_connection);
     $dishes = $dishController->getAllDishes();
+
+    if (!isset($_SESSION['cart'])) $_SESSION['cart'] = [];
 ?>
 <!DOCTYPE html>
 <html lang="ru" class="scroll-smooth">
@@ -64,6 +66,9 @@
             object-fit: cover;
             object-position: center;
         }
+        .qty-btn { 
+            width: 32px; height: 32px; 
+        }
     </style>
 </head>
 <body class="min-h-screen text-gray-100 font-sans">
@@ -81,6 +86,15 @@
                     <a href="pages/auth/login.php" class="text-gray-300 hover:text-white transition">Войти</a>
                     <a href="pages/auth/regin.php" class="text-gray-300 hover:text-sushi-gold transition">Регистрация</a>
                 <?php else: ?>
+                    <a href="pages/order/order.php" id="cart-link" class="flex items-center gap-2 hover:text-sushi-gold transition relative text-2xl">
+                        <span class="relative">
+                            <span class="text-3xl">🛒</span>
+                            <span id="cart-count"
+                                  class="bg-sushi-red text-white text-xs font-bold px-2 py-0.5 rounded-full absolute -top-1 -right-1">
+                                <?= array_sum(array_column($_SESSION['cart'], 'qty')) ?>
+                            </span>
+                        </span>
+                    </a>
                     <span class="text-gray-300">Здравствуйте, <?= htmlspecialchars($_SESSION["user_name"]) ?></span>
                     <a href="pages/auth/login.php?logout=1" class="text-gray-300 hover:text-red-400 transition">Выйти</a>
                 <?php endif; ?>
@@ -101,16 +115,13 @@
 
         <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6 md:gap-8">
 
-            <?php foreach ($dishes as $dish): ?>
+            <?php foreach ($dishes as $dish): 
+                $inCart = $_SESSION['cart'][$dish->id] ?? null;    
+            ?>
                 <div class="glass rounded-2xl overflow-hidden card-hover shadow-xl flex flex-col h-full">
 
                     <div class="relative">
-                        <img 
-                            src="<?= htmlspecialchars($dish->image_path) ?>" 
-                            alt="<?= htmlspecialchars($dish->name) ?>" 
-                            class="dish-img w-full"
-                            loading="lazy"
-                        >
+                        <img  src="<?= htmlspecialchars($dish->image_path) ?>"  alt="<?= htmlspecialchars($dish->name) ?>"  class="dish-img w-full" loading="lazy">
                         <div class="absolute top-3 right-3 bg-sushi-red text-white text-xs font-bold px-3 py-1 rounded-full">
                             <?= number_format($dish->price, 0, '', ' ') ?> ₽
                         </div>
@@ -126,15 +137,19 @@
                         </p>
 
                         <?php if (isset($_SESSION["user_id"])): ?>
-                            <form method="POST" action="pages/order/add_to_order.php" class="mt-auto">
-                                <input type="hidden" name="dish_id" value="<?= $dish->id ?>">
-                                <button 
-                                    type="submit"
-                                    class="btn-glow w-full py-3 bg-sushi-red hover:bg-red-700 text-white font-medium rounded-lg transition-all duration-300 shadow-md"
-                                >
-                                    Добавить в корзину
+                            <?php if ($inCart): ?>
+                                <div class="flex items-center justify-center gap-1 bg-gray-800 rounded-lg p-1" id="qty-block-<?= $dish->id ?>">
+                                    <button onclick="changeQty(<?= $dish->id ?>, -1)" class="qty-btn bg-gray-700 hover:bg-gray-600 rounded">–</button>
+                                    <span id="qty-<?= $dish->id ?>" class="w-10 text-center font-semibold"><?= $inCart['qty'] ?></span>
+                                    <button onclick="changeQty(<?= $dish->id ?>, 1)" class="qty-btn bg-gray-700 hover:bg-gray-600 rounded">+</button>
+                                </div>
+                            <?php else: ?>
+                                <button onclick="addToCart(<?= $dish->id ?>, '<?= htmlspecialchars($dish->name) ?>', <?= $dish->price ?>)" 
+                                        id="add-btn-<?= $dish->id ?>"
+                                        class="px-5 py-2 bg-sushi-red hover:bg-red-700 font-medium rounded-lg transition">
+                                    В корзину
                                 </button>
-                            </form>
+                            <?php endif; ?>
                         <?php else: ?>
                             <div class="mt-auto text-center text-sm text-gray-500">
                                 <a href="pages/auth/login.php" class="text-sushi-gold hover:underline">
@@ -161,3 +176,53 @@
     </footer>
 </body>
 </html>
+<script>
+    async function addToCart(id, name, price) {
+        await fetch('pages/order/add_to_cart.php', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({dish_id: id, name, price})
+        });
+
+        document.getElementById(`add-btn-${id}`).outerHTML = `
+            <div class="flex items-center justify-center gap-1 bg-gray-800 rounded-lg p-1" id="qty-block-${id}">
+                <button onclick="changeQty(${id}, -1)" class="qty-btn bg-gray-700 hover:bg-gray-600 rounded">–</button>
+                <span id="qty-${id}" class="w-10 text-center font-semibold">1</span>
+                <button onclick="changeQty(${id}, 1)" class="qty-btn bg-gray-700 hover:bg-gray-600 rounded">+</button>
+            </div>`;
+                
+        updateCartCount();
+    }
+
+    async function changeQty(id, delta) {
+        await fetch('pages/order/add_to_cart.php', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({dish_id: id, delta})
+        });
+
+        const qtyEl = document.getElementById(`qty-${id}`);
+        let qty = parseInt(qtyEl.textContent) + delta;
+                
+        if (qty <= 0) {
+            document.getElementById(`qty-block-${id}`).outerHTML = `
+                <button onclick="addToCart(${id}, 'Название', 999)" id="add-btn-${id}"
+                        class="px-5 py-2 bg-sushi-red hover:bg-red-700 font-medium rounded-lg transition">
+                    В корзину
+                </button>`;
+        } else {
+            qtyEl.textContent = qty;
+        }
+        updateCartCount();
+    }
+
+    function updateCartCount() {
+        fetch('pages/order/get_cart_count.php')
+            .then(r => r.text())
+            .then(count => {
+                document.getElementById('cart-count').textContent = count || 0;
+            });
+    }
+
+    window.onload = updateCartCount;
+</script>
