@@ -65,7 +65,7 @@
                         $redirect = "../../pages/employee/waiter.php";
                         break;
 
-                    case "admin":
+                    case "administrator":
                         $redirect = "../../pages/employee/admin.php";
                         break;
 
