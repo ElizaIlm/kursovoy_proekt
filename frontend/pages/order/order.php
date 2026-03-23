@@ -9,7 +9,7 @@
 <html lang="ru">
 <head>
     <meta charset="UTF-8">
-    <title>Ваш заказ | Суши Premium</title>
+    <title>Ваш заказ</title>
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <script src="https://cdn.tailwindcss.com"></script>
     <style>body { background: linear-gradient(to bottom right, #0f1419, #080c0f); }</style>

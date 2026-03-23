@@ -59,9 +59,24 @@
                 $_SESSION["user_name"] = $employee["full_name"];
                 $_SESSION["role"] = $employee["role"];
 
+                switch ($employee["role"]) {
+
+                    case "waiter":
+                        $redirect = "../../pages/employee/waiter.php";
+                        break;
+
+                    case "admin":
+                        $redirect = "../../pages/employee/admin.php";
+                        break;
+
+                    default:
+                        $redirect = "../../index.php";
+                        break;
+                }
+
                 return [
                     "success" => true,
-                    "redirect" => "../../index.php"
+                    "redirect" => $redirect
                 ];
             }
 
