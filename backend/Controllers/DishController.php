@@ -62,7 +62,7 @@ class DishController
             VALUES (?, ?, ?, ?, ?, 1, NOW())
         ");
 
-        $stmt->bind_param("ssds", $name, $composition, $price, $description, $imagePath);
+        $stmt->bind_param("ssdss", $name, $composition, $price, $description, $imagePath);
 
         return $stmt->execute();
     }

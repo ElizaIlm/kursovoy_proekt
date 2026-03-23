@@ -159,7 +159,7 @@
 </main>
 
 <footer class="text-center py-8 text-gray-500 border-t border-gray-800 mt-12">
-© <?= date("Y") ?> Лучший суши-ресторан
+    © <?= date("Y") ?> Лучший суши-ресторан
 </footer>
 
 </body>
