@@ -29,14 +29,42 @@
         $description = trim($_POST["description"]);
         $availability = isset($_POST["availability"]) ? 1 : 0;
 
-        $dishCtrl->updateDish(
-            $id,
+        $imagePath = $dish->image_path;
+
+        if (!empty($_FILES["image"]["name"]) && $_FILES["image"]["error"] === 0) {
+
+            $uploadDir = ROOT . "/frontend/img/";
+            $fileName = time() . "_" . basename($_FILES["image"]["name"]);
+            $targetFile = $uploadDir . $fileName;
+
+            if (move_uploaded_file($_FILES["image"]["tmp_name"], $targetFile)) {
+
+                if ($dish->image_path && file_exists(ROOT . "/frontend/" . $dish->image_path)) {
+                    unlink(ROOT . "/frontend/" . $dish->image_path);
+                }
+
+                $imagePath = "img/" . $fileName;
+            }
+        }
+
+        $stmt = $mysql_connection->prepare("
+            UPDATE dishes 
+            SET name=?, composition=?, price=?, description=?, availability=?, image_path=? 
+            WHERE id=?
+        ");
+
+        $stmt->bind_param(
+            "ssdssis",
             $name,
             $composition,
             $price,
             $description,
-            $availability
+            $availability,
+            $imagePath,
+            $id
         );
+
+        $stmt->execute();
 
         header("Location: dishes.php?msg=updated");
         exit;
@@ -63,7 +91,7 @@
 <body class="text-gray-100 min-h-screen">
 <header class="bg-gray-900 border-b border-gray-800">
     <div class="max-w-7xl mx-auto px-6 py-4 flex justify-between">
-        <span class="text-red-600">プレミアム寿司</span>
+        <span class="text-red-600 text-3xl font-bold">プレミアム寿司</span>
         <a href="dishes.php" class="text-gray-300 hover:text-white">← Назад</a>
     </div>
 </header>
@@ -96,6 +124,16 @@
             <div class="flex items-center gap-2">
                 <input type="checkbox" name="availability" <?= $dish->availability ? "checked" : "" ?> class="w-5 h-5">
                 <span>Доступно для заказа</span>
+            </div>
+
+            <div>
+                <label class="block mb-2">Текущее изображение</label>
+                <img src="../../<?= $dish->image_path ?>" class="w-32 h-32 object-cover rounded-lg border border-gray-700">
+            </div>
+
+            <div>
+                <label class="block mb-2">Загрузить новое изображение</label>
+                <input type="file" name="image" accept="image/*" class="w-full bg-gray-800 border border-gray-700 rounded px-4 py-3">
             </div>
 
             <button class="bg-red-700 hover:bg-red-600 py-4 rounded text-lg"> Сохранить изменения</button>
