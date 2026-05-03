@@ -6,6 +6,24 @@ class OrderController
 {
     private $db;
 
+    /** @return string[] */
+    public static function allowedStatuses(): array
+    {
+        return ['new', 'preparing', 'ready', 'completed'];
+    }
+
+    public static function statusLabelRu(string $status): string
+    {
+        $map = [
+            'new' => 'Новый',
+            'preparing' => 'Готовится',
+            'ready' => 'Готов к подаче',
+            'completed' => 'Завершён',
+        ];
+
+        return $map[$status] ?? $status;
+    }
+
     public function __construct($mysql_connection)
     {
         $this->db = $mysql_connection;
@@ -64,8 +82,8 @@ class OrderController
             }
 
             $stmt = $this->db->prepare("
-                INSERT INTO orders (order_datetime, client_id, employee_id, total_amount)
-                VALUES (NOW(), ?, ?, ?)
+                INSERT INTO orders (order_datetime, client_id, employee_id, total_amount, status)
+                VALUES (NOW(), ?, ?, ?, 'new')
             ");
 
             $stmt->bind_param("iid", $client_id, $employee_id, $total);
@@ -96,5 +114,76 @@ class OrderController
             $this->db->rollback();
             return false;
         }
+    }
+
+    /**
+     * Заказ «с зала»: официант сам себе назначен исполнителем.
+     */
+    public function createOrderByWaiter(int $employee_id, array $cart)
+    {
+        if (empty($cart)) {
+            return false;
+        }
+
+        $this->db->begin_transaction();
+
+        try {
+
+            $total = 0;
+            foreach ($cart as $item) {
+                $total += $item['price'] * $item['qty'];
+            }
+
+            $stmt = $this->db->prepare("
+                INSERT INTO orders (order_datetime, client_id, employee_id, total_amount, status)
+                VALUES (NOW(), NULL, ?, ?, 'new')
+            ");
+
+            $stmt->bind_param("id", $employee_id, $total);
+            $stmt->execute();
+
+            $order_id = $this->db->insert_id;
+
+            $stmt = $this->db->prepare("
+                INSERT INTO order_items (order_id, dish_id, quantity, price_at_order)
+                VALUES (?, ?, ?, ?)
+            ");
+
+            foreach ($cart as $item) {
+
+                $dish_id = (int)$item['id'];
+                $qty = $item['qty'];
+                $price = $item['price'];
+
+                $stmt->bind_param("iiid", $order_id, $dish_id, $qty, $price);
+                $stmt->execute();
+            }
+
+            $this->db->commit();
+
+            return $order_id;
+
+        } catch (Exception $e) {
+
+            $this->db->rollback();
+            return false;
+        }
+    }
+
+    public function updateStatusForWaiter(int $order_id, int $waiter_id, string $status): bool
+    {
+        if (!in_array($status, self::allowedStatuses(), true)) {
+            return false;
+        }
+
+        $stmt = $this->db->prepare("
+            UPDATE orders SET status = ?
+            WHERE id = ? AND employee_id = ?
+        ");
+
+        $stmt->bind_param("sii", $status, $order_id, $waiter_id);
+        $stmt->execute();
+
+        return $stmt->affected_rows > 0;
     }
 }

@@ -9,13 +9,14 @@
     define('ROOT', dirname(__DIR__, 3));
 
     require_once ROOT . "/settings/connect_database.php";
-
+    require_once ROOT . "/backend/Controllers/OrderController.php";
 
     $sql = "
     SELECT 
         o.id,
         o.order_datetime,
         o.total_amount,
+        o.status,
         c.full_name AS client_name,
         e.full_name AS waiter_name
     FROM orders o
@@ -71,6 +72,7 @@
                         <th class="p-4">Дата</th>
                         <th class="p-4">Клиент</th>
                         <th class="p-4">Официант</th>
+                        <th class="p-4">Статус</th>
                         <th class="p-4">Сумма</th>
                         <th class="p-4">Подробнее</th>
                     </tr>
@@ -89,6 +91,9 @@
                             </td>
                             <td class="p-4">
                                 <?= htmlspecialchars($order['waiter_name'] ?? "—") ?>
+                            </td>
+                            <td class="p-4 text-amber-300">
+                                <?= htmlspecialchars(OrderController::statusLabelRu($order['status'] ?? 'new')) ?>
                             </td>
                             <td class="p-4 text-green-400 font-semibold">
                                 <?= number_format($order['total_amount'],0,' ',' ') ?> ₽

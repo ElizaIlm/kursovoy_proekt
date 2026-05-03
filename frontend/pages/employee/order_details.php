@@ -1,7 +1,14 @@
 <?php
 session_start();
 
-if (!isset($_SESSION['user_id']) || ($_SESSION['role'] ?? '') !== 'administrator') {
+if (!isset($_SESSION['user_id'])) {
+    header("Location: ../auth/login.php");
+    exit;
+}
+
+$role = $_SESSION['role'] ?? '';
+
+if ($role !== 'administrator' && $role !== 'waiter') {
     header("Location: ../auth/login.php");
     exit;
 }
@@ -9,6 +16,7 @@ if (!isset($_SESSION['user_id']) || ($_SESSION['role'] ?? '') !== 'administrator
 define('ROOT', dirname(__DIR__, 3));
 
 require_once ROOT . "/settings/connect_database.php";
+require_once ROOT . "/backend/Controllers/OrderController.php";
 
 $order_id = (int)($_GET['id'] ?? 0);
 
@@ -21,6 +29,8 @@ SELECT
     o.id,
     o.order_datetime,
     o.total_amount,
+    o.status,
+    o.employee_id,
     c.full_name AS client_name,
     e.full_name AS waiter_name
 FROM orders o
@@ -35,6 +45,11 @@ $order = $stmt->get_result()->fetch_assoc();
 
 if (!$order) {
     die("Заказ не найден");
+}
+
+if ($role === 'waiter' && (int)$order['employee_id'] !== (int)$_SESSION['user_id']) {
+    header("HTTP/1.1 403 Forbidden");
+    die("Нет доступа к этому заказу");
 }
 
 $stmt = $mysql_connection->prepare("
@@ -80,7 +95,11 @@ while ($row = $result->fetch_assoc()) {
     <header class="bg-gray-900 border-b border-gray-800">
         <div class="max-w-7xl mx-auto px-6 py-4 flex justify-between">
             <span class="text-red-600 text-3xl font-bold">プレミアム寿司</span>
-            <a href="orders.php" class="text-gray-300 hover:text-white">← Назад к заказам</a>
+            <?php if ($role === 'administrator'): ?>
+                <a href="orders.php" class="text-gray-300 hover:text-white">← Назад к заказам</a>
+            <?php else: ?>
+                <a href="waiter.php" class="text-gray-300 hover:text-white">← Мои заказы</a>
+            <?php endif; ?>
         </div>
     </header>
     <main class="max-w-5xl mx-auto px-6 py-10">
@@ -97,6 +116,12 @@ while ($row = $result->fetch_assoc()) {
             <div>
                 <span class="text-gray-400">Официант:</span><br>
                 <?= htmlspecialchars($order['waiter_name'] ?? "—") ?>
+            </div>
+            <div>
+                <span class="text-gray-400">Статус:</span><br>
+                <span class="text-amber-400 font-semibold">
+                    <?= htmlspecialchars(OrderController::statusLabelRu($order['status'] ?? 'new')) ?>
+                </span>
             </div>
             <div>
                 <span class="text-gray-400">Сумма заказа:</span><br>

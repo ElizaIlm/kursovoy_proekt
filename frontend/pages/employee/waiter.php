@@ -1,7 +1,6 @@
 <?php
 session_start();
 
-
 if (!isset($_SESSION['user_id']) || ($_SESSION['role'] ?? '') !== 'waiter') {
     header("Location: ../auth/login.php");
     exit;
@@ -10,110 +9,22 @@ if (!isset($_SESSION['user_id']) || ($_SESSION['role'] ?? '') !== 'waiter') {
 define('ROOT', dirname(__DIR__, 3));
 
 require_once ROOT . "/settings/connect_database.php";
-require_once ROOT . "/backend/Controllers/DishController.php";
+require_once ROOT . "/backend/Controllers/OrderController.php";
 require_once ROOT . "/vendor/autoload.php";
 
 use PhpOffice\PhpSpreadsheet\Spreadsheet;
 use PhpOffice\PhpSpreadsheet\Writer\Xlsx;
 
-$dishController = new DishController($mysql_connection);
-$dishes = $dishController->getAllDishes();
-
-if (!isset($_SESSION['waiter_cart'])) {
-    $_SESSION['waiter_cart'] = [];
-}
+$orderController = new OrderController($mysql_connection);
 
 $action = $_POST['action'] ?? $_GET['action'] ?? '';
 
-if ($action === 'add' && isset($_POST['dish_id'], $_POST['quantity'])) {
+if ($action === 'update_status' && isset($_POST['order_id'], $_POST['status'])) {
 
-    $dish_id = (int)$_POST['dish_id'];
-    $qty = max(1, (int)$_POST['quantity']);
+    $order_id = (int)$_POST['order_id'];
+    $status = (string)$_POST['status'];
 
-    $dish = $dishController->getDishById($dish_id);
-
-    if ($dish) {
-
-        $id = $dish->id;
-
-        if (isset($_SESSION['waiter_cart'][$id])) {
-            $_SESSION['waiter_cart'][$id]['qty'] += $qty;
-        } else {
-
-            $_SESSION['waiter_cart'][$id] = [
-                'id' => $id,
-                'name' => $dish->name,
-                'price' => $dish->price,
-                'qty' => $qty
-            ];
-        }
-    }
-
-    header("Location: waiter.php");
-    exit;
-}
-
-if ($action === 'remove' && isset($_GET['dish_id'])) {
-
-    $dish_id = (int)$_GET['dish_id'];
-    unset($_SESSION['waiter_cart'][$dish_id]);
-
-    header("Location: waiter.php");
-    exit;
-}
-
-if ($action === 'create' && !empty($_SESSION['waiter_cart'])) {
-
-    $mysql_connection->begin_transaction();
-
-    try {
-
-        $total = 0;
-
-        foreach ($_SESSION['waiter_cart'] as $item) {
-            $total += $item['price'] * $item['qty'];
-        }
-
-        $stmt = $mysql_connection->prepare("
-            INSERT INTO orders (order_datetime, client_id, employee_id, total_amount)
-            VALUES (NOW(), NULL, ?, ?)
-        ");
-
-        $stmt->bind_param("id", $_SESSION['user_id'], $total);
-        $stmt->execute();
-
-        $order_id = $mysql_connection->insert_id;
-
-        $stmt_items = $mysql_connection->prepare("
-            INSERT INTO order_items (order_id, dish_id, quantity, price_at_order)
-            VALUES (?, ?, ?, ?)
-        ");
-
-        foreach ($_SESSION['waiter_cart'] as $item) {
-
-            $stmt_items->bind_param(
-                "iiid",
-                $order_id,
-                $item['id'],
-                $item['qty'],
-                $item['price']
-            );
-
-            $stmt_items->execute();
-        }
-
-        $mysql_connection->commit();
-
-        $_SESSION['waiter_cart'] = [];
-
-        $successMsg = "Заказ #$order_id успешно создан";
-
-    } catch (Exception $e) {
-
-        $mysql_connection->rollback();
-        $errorMsg = "Ошибка создания заказа";
-
-    }
+    $orderController->updateStatusForWaiter($order_id, (int)$_SESSION['user_id'], $status);
 
     header("Location: waiter.php");
     exit;
@@ -128,6 +39,7 @@ if ($action === 'export_today') {
             o.id,
             o.order_datetime,
             o.total_amount,
+            o.status,
             GROUP_CONCAT(
                 CONCAT(d.name, ' ×', oi.quantity)
                 SEPARATOR ', '
@@ -137,7 +49,7 @@ if ($action === 'export_today') {
         LEFT JOIN dishes d ON d.id = oi.dish_id
         WHERE o.employee_id = ?
         AND DATE(o.order_datetime) = ?
-        GROUP BY o.id
+        GROUP BY o.id, o.order_datetime, o.total_amount, o.status
         ORDER BY o.order_datetime DESC
     ";
 
@@ -153,8 +65,9 @@ if ($action === 'export_today') {
 
     $sheet->setCellValue('A1', '№ заказа');
     $sheet->setCellValue('B1', 'Время');
-    $sheet->setCellValue('C1', 'Блюда');
-    $sheet->setCellValue('D1', 'Сумма');
+    $sheet->setCellValue('C1', 'Статус');
+    $sheet->setCellValue('D1', 'Блюда');
+    $sheet->setCellValue('E1', 'Сумма');
 
     $row = 2;
     $total = 0;
@@ -163,19 +76,20 @@ if ($action === 'export_today') {
 
         $sheet->setCellValue("A$row", $order['id']);
         $sheet->setCellValue("B$row", $order['order_datetime']);
-        $sheet->setCellValue("C$row", $order['items']);
-        $sheet->setCellValue("D$row", $order['total_amount']);
+        $sheet->setCellValue("C$row", OrderController::statusLabelRu($order['status'] ?? 'new'));
+        $sheet->setCellValue("D$row", $order['items']);
+        $sheet->setCellValue("E$row", $order['total_amount']);
 
         $total += $order['total_amount'];
 
         $row++;
     }
 
-    $sheet->setCellValue("C$row", "ИТОГО");
-    $sheet->setCellValue("D$row", $total);
+    $sheet->setCellValue("D$row", "ИТОГО");
+    $sheet->setCellValue("E$row", $total);
 
-    $sheet->getStyle("A1:D1")->getFont()->setBold(true);
-    $sheet->getStyle("C$row:D$row")->getFont()->setBold(true);
+    $sheet->getStyle("A1:E1")->getFont()->setBold(true);
+    $sheet->getStyle("D$row:E$row")->getFont()->setBold(true);
 
     header('Content-Type: application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
     header('Content-Disposition: attachment;filename="orders_' . $today . '.xlsx"');
@@ -185,6 +99,22 @@ if ($action === 'export_today') {
     $writer->save('php://output');
     exit;
 }
+
+$stmt = $mysql_connection->prepare("
+    SELECT id, order_datetime, total_amount, client_id, status
+    FROM orders
+    WHERE employee_id = ?
+    ORDER BY order_datetime DESC
+");
+$stmt->bind_param("i", $_SESSION['user_id']);
+$stmt->execute();
+$my_orders = $stmt->get_result()->fetch_all(MYSQLI_ASSOC);
+
+$allowed_statuses = OrderController::allowedStatuses();
+
+$flash_ok = $_SESSION['waiter_flash_ok'] ?? null;
+$flash_err = $_SESSION['waiter_flash_err'] ?? null;
+unset($_SESSION['waiter_flash_ok'], $_SESSION['waiter_flash_err']);
 ?>
 
 <!DOCTYPE html>
@@ -204,105 +134,88 @@ if ($action === 'export_today') {
 <body class="text-gray-100 min-h-screen">
 
 <header class="bg-gray-900/80 border-b border-gray-800 sticky top-0 z-50 backdrop-blur">
-    <div class="max-w-7xl mx-auto px-6 py-4 flex justify-between items-center">
+    <div class="max-w-7xl mx-auto px-6 py-4 flex justify-between items-center flex-wrap gap-4">
         <span class="text-red-600 text-3xl font-bold">プレミアム寿司</span>
-        <div class="flex items-center gap-6">
-            <span>Официант: <?= htmlspecialchars($_SESSION['user_name'] ?? '—') ?></span>
+        <div class="flex items-center gap-6 flex-wrap">
+            <a href="waiter_new_order.php" class="bg-red-700 hover:bg-red-600 px-4 py-2 rounded-lg font-medium transition">
+                Новый заказ
+            </a>
+            <span class="text-gray-300">Официант: <?= htmlspecialchars($_SESSION['user_name'] ?? '—') ?></span>
             <a href="../auth/login.php?logout=1" class="text-red-400 hover:text-red-300">Выйти</a>
         </div>
     </div>
 </header>
 
-<main class="max-w-7xl mx-auto px-6 py-10 grid lg:grid-cols-2 gap-8">
+<main class="max-w-7xl mx-auto px-6 py-10">
 
     <section class="glass rounded-2xl p-6">
-        <h2 class="text-2xl font-bold mb-6">Меню</h2>
-        <div class="grid sm:grid-cols-2 gap-5 max-h-[70vh] overflow-y-auto pr-2">
-            <?php foreach ($dishes as $dish): ?>
-            <div class="bg-gray-900/60 rounded-xl p-4 flex flex-col">
-                <h3 class="font-semibold"><?= htmlspecialchars($dish->name) ?></h3>
-                <div class="text-yellow-500 font-bold mt-1"><?= number_format($dish->price, 0, '', ' ') ?> ₽</div>
-                <form method="post" class="mt-4 flex gap-3 items-center">
-                    <input type="hidden" name="action" value="add">
-                    <input type="hidden" name="dish_id" value="<?= $dish->id ?>">
-                    <input type="number" name="quantity" value="1" min="1" class="w-16 bg-gray-800 border border-gray-700 rounded text-center py-1">
-                    <button type="submit" class="flex-1 bg-red-700 hover:bg-red-600 rounded py-1.5 font-medium">Добавить</button>
-                </form>
-            </div>
-            <?php endforeach; ?>
+        <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-6">
+            <h2 class="text-2xl font-bold">Мои заказы</h2>
+            <a href="?action=export_today" class="bg-blue-900/70 hover:bg-blue-800 text-center py-3 px-6 rounded-xl font-medium shrink-0">
+                Скачать отчёт за сегодня (.xlsx)
+            </a>
         </div>
-    </section>
 
-    <section class="glass rounded-2xl p-6 flex flex-col">
-        <h2 class="text-2xl font-bold mb-6">Текущий заказ</h2>
-
-        <?php if (!empty($_SESSION['waiter_cart'])): 
-            $total = 0;
-        ?>
-            <div class="flex-1 overflow-y-auto mb-6">
-                <table class="w-full text-sm">
+        <?php if (empty($my_orders)): ?>
+            <p class="text-gray-400 text-center py-16">Заказов пока нет. Создайте первый через «Новый заказ».</p>
+        <?php else: ?>
+            <div class="overflow-x-auto">
+                <table class="w-full text-sm min-w-[640px]">
                     <thead class="bg-gray-800/70">
                         <tr>
-                            <th class="p-3 text-left">Блюдо</th>
-                            <th class="p-3 text-center">Кол-во</th>
-                            <th class="p-3 text-right">Сумма</th>
-                            <th class="w-10"></th>
+                            <th class="p-3 text-left">№</th>
+                            <th class="p-3 text-left">Дата</th>
+                            <th class="p-3 text-left">Сумма</th>
+                            <th class="p-3 text-left">Статус</th>
+                            <th class="p-3 text-left"></th>
                         </tr>
                     </thead>
                     <tbody>
-                        <?php foreach ($_SESSION['waiter_cart'] as $item): 
-                            $sum = $item['price'] * $item['qty'];
-                            $total += $sum;
+                        <?php foreach ($my_orders as $o):
+                            $st = $o['status'] ?? 'new';
                         ?>
-                        <tr class="border-b border-gray-800">
-                            <td class="p-3"><?= htmlspecialchars($item['name']) ?></td>
-                            <td class="p-3 text-center font-medium"><?= $item['qty'] ?></td>
-                            <td class="p-3 text-right"><?= number_format($sum, 0, '', ' ') ?> ₽</td>
-                            <td class="p-3 text-center">
-                                <a href="?action=remove&dish_id=<?= $item['id'] ?>" class="text-red-400 hover:text-red-300 text-lg">×</a>
+                        <tr class="border-b border-gray-800 align-top">
+                            <td class="p-3 font-medium"><?= (int)$o['id'] ?></td>
+                            <td class="p-3 whitespace-nowrap"><?= date('d.m.Y H:i', strtotime($o['order_datetime'])) ?></td>
+                            <td class="p-3 text-yellow-500 font-semibold"><?= number_format((float)$o['total_amount'], 0, '', ' ') ?> ₽</td>
+                            <td class="p-3">
+                                <form method="post" class="flex flex-col sm:flex-row gap-2 items-stretch sm:items-center">
+                                    <input type="hidden" name="action" value="update_status">
+                                    <input type="hidden" name="order_id" value="<?= (int)$o['id'] ?>">
+                                    <select name="status" class="bg-gray-800 border border-gray-700 rounded px-3 py-2 min-w-[180px]">
+                                        <?php foreach ($allowed_statuses as $code): ?>
+                                            <option value="<?= htmlspecialchars($code) ?>" <?= $st === $code ? 'selected' : '' ?>>
+                                                <?= htmlspecialchars(OrderController::statusLabelRu($code)) ?>
+                                            </option>
+                                        <?php endforeach; ?>
+                                    </select>
+                                    <button type="submit" class="bg-gray-700 hover:bg-gray-600 px-4 py-2 rounded-lg whitespace-nowrap">
+                                        Сохранить
+                                    </button>
+                                </form>
+                            </td>
+                            <td class="p-3">
+                                <a href="order_details.php?id=<?= (int)$o['id'] ?>" class="text-blue-400 hover:text-blue-300 whitespace-nowrap">Подробнее</a>
                             </td>
                         </tr>
                         <?php endforeach; ?>
                     </tbody>
                 </table>
             </div>
-
-            <div class="text-2xl font-bold text-right mb-6">
-                Итого: <span class="text-yellow-500"><?= number_format($total, 0, '', ' ') ?> ₽</span>
-            </div>
-
-            <form method="post" class="space-y-4">
-                <input type="hidden" name="action" value="create">
-                <button type="submit" class="w-full bg-green-700 hover:bg-green-600 py-4 rounded-xl font-semibold text-lg transition">
-                    Создать заказ
-                </button>
-            </form>
-
-        <?php else: ?>
-            <div class="text-center py-20 text-gray-400">
-                Корзина пуста<br>Добавьте блюда из меню слева
-            </div>
         <?php endif; ?>
-
-        <div class="mt-10 pt-6 border-t border-gray-700">
-            <h3 class="text-xl font-semibold mb-4">Мои заказы</h3>
-            <a href="?action=export_today" class="block bg-blue-900/70 hover:bg-blue-800 text-center py-3 rounded-xl font-medium">
-                Скачать отчёт за сегодня (.xlsx)
-            </a>
-        </div>
     </section>
 
 </main>
 
-<?php if (isset($successMsg)): ?>
+<?php if ($flash_ok): ?>
 <div class="fixed bottom-8 right-8 bg-green-700 px-6 py-4 rounded-xl shadow-2xl z-50">
-    <?= htmlspecialchars($successMsg) ?>
+    <?= htmlspecialchars($flash_ok) ?>
 </div>
 <?php endif; ?>
 
-<?php if (isset($errorMsg)): ?>
+<?php if ($flash_err): ?>
 <div class="fixed bottom-8 right-8 bg-red-700 px-6 py-4 rounded-xl shadow-2xl z-50">
-    <?= htmlspecialchars($errorMsg) ?>
+    <?= htmlspecialchars($flash_err) ?>
 </div>
 <?php endif; ?>
 

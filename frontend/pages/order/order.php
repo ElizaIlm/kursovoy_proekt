@@ -11,14 +11,47 @@
     <meta charset="UTF-8">
     <title>Ваш заказ</title>
     <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600&family=Noto+Sans+JP:wght@400;500;700&display=swap" rel="stylesheet">
+
     <script src="https://cdn.tailwindcss.com"></script>
-    <style>body { background: linear-gradient(to bottom right, #0f1419, #080c0f); }</style>
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    colors: {
+                        'sushi-red':    '#c8102e',
+                        'sushi-dark':   '#0f1419',
+                        'sushi-darker': '#080c0f',
+                        'sushi-gold':   '#d4a017',
+                        'sushi-soy':    '#3c2f2f',
+                    },
+                    fontFamily: {
+                        'sans':     ['Inter', 'system-ui', 'sans-serif'],
+                        'japanese': ['Noto Sans JP', 'sans-serif'],
+                    }
+                }
+            }
+        }
+    </script>
+    <style>
+        body {
+            background: linear-gradient(to bottom right, #0f1419, #080c0f);
+            background-attachment: fixed;
+        }
+        .glass {
+            background: rgba(15, 20, 25, 0.65);
+            backdrop-filter: blur(10px);
+            -webkit-backdrop-filter: blur(10px);
+            border: 1px solid rgba(255,255,255,0.06);
+        }
+    </style>
 </head>
-<body class="min-h-screen text-gray-100">
+<body class="min-h-screen text-gray-100 font-sans">
 
 <div class="max-w-4xl mx-auto px-5 py-10">
 
-    <h1 class="text-4xl font-bold japanese text-center mb-8">Ваш заказ <span class="text-sushi-red"></span></h1>
+    <h1 class="text-4xl font-bold japanese text-center mb-8">Ваш <span class="text-sushi-red">заказ</span></h1>
 
     <div class="glass rounded-3xl p-8">
         <table class="w-full">

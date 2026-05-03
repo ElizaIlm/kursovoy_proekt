@@ -9,6 +9,7 @@ define('ROOT', dirname(__DIR__, 3));
 
 require_once ROOT . "/vendor/autoload.php";
 require_once ROOT . "/settings/connect_database.php";
+require_once ROOT . "/backend/Controllers/OrderController.php";
 
 use PhpOffice\PhpSpreadsheet\Spreadsheet;
 use PhpOffice\PhpSpreadsheet\Writer\Xlsx;
@@ -16,7 +17,7 @@ use PhpOffice\PhpSpreadsheet\Writer\Xlsx;
 $spreadsheet = new Spreadsheet();
 
 $orders = $mysql_connection->query("
-SELECT o.id, o.order_datetime, o.total_amount,
+SELECT o.id, o.order_datetime, o.total_amount, o.status,
        c.full_name AS client,
        e.full_name AS waiter
 FROM orders o
@@ -29,7 +30,7 @@ $sheet = $spreadsheet->getActiveSheet();
 $sheet->setTitle("Заказы");
 
 $sheet->fromArray(
-    ['ID', 'Дата', 'Сумма', 'Клиент', 'Официант'],
+    ['ID', 'Дата', 'Сумма', 'Статус', 'Клиент', 'Официант'],
     NULL,
     'A1'
 );
@@ -41,6 +42,7 @@ while ($o = $orders->fetch_assoc()) {
         $o['id'],
         $o['order_datetime'],
         $o['total_amount'],
+        OrderController::statusLabelRu($o['status'] ?? 'new'),
         $o['client'],
         $o['waiter']
     ], NULL, 'A' . $row);
